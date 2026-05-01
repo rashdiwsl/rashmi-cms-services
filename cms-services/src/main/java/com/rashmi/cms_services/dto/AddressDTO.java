@@ -1,0 +1,11 @@
+package com.rashmi.cms_services.dto;
+
+import lombok.Data;
+
+@Data
+public class AddressDTO {
+    private String addressLine1;
+    private String addressLine2;
+    private Long cityId;
+    private Long countryId;
+}
