@@ -3,8 +3,8 @@ package com.rashmi.cms_services.repository;
 import com.rashmi.cms_services.entity.Customer;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -14,6 +14,15 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     boolean existsByNicNumber(String nicNumber);
 
-    @Query("SELECT c FROM Customer c LEFT JOIN FETCH c.mobiles LEFT JOIN FETCH c.addresses LEFT JOIN FETCH c.familyMembers WHERE c.id = :id")
-    Optional<Customer> findByIdWithDetails(Long id);
+    boolean existsByNicNumberAndIdNot(String nicNumber, Long id);
+
+    @Query("SELECT DISTINCT c FROM Customer c " +
+            "LEFT JOIN FETCH c.mobiles " +
+            "LEFT JOIN FETCH c.addresses a " +
+            "LEFT JOIN FETCH a.city ct " +
+            "LEFT JOIN FETCH ct.country " +
+            "LEFT JOIN FETCH c.familyMembers f " +
+            "LEFT JOIN FETCH f.familyMember " +
+            "WHERE c.id = :id")
+    Optional<Customer> findByIdWithDetails(@Param("id") Long id);
 }
