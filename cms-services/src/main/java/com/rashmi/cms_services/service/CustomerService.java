@@ -16,10 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,7 +43,6 @@ public class CustomerService {
         Customer customer = customerRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new RuntimeException("Customer not found: " + id));
 
-        // ✅ Check NIC uniqueness on update (exclude current customer)
         if (customerRepository.existsByNicNumberAndIdNot(dto.getNicNumber(), id)) {
             throw new RuntimeException("NIC number already exists: " + dto.getNicNumber());
         }
@@ -55,7 +51,6 @@ public class CustomerService {
         customer.setDateOfBirth(dto.getDateOfBirth());
         customer.setNicNumber(dto.getNicNumber());
 
-        // ✅ Clear and re-add mobiles
         customer.getMobiles().clear();
         if (dto.getMobileNumbers() != null) {
             dto.getMobileNumbers().forEach(num -> {
@@ -66,7 +61,6 @@ public class CustomerService {
             });
         }
 
-        // ✅ Clear and re-add addresses
         customer.getAddresses().clear();
         if (dto.getAddresses() != null) {
             dto.getAddresses().stream()
@@ -86,7 +80,6 @@ public class CustomerService {
                     });
         }
 
-        // ✅ Clear and re-add family members
         customer.getFamilyMembers().clear();
         if (dto.getFamilyMemberIds() != null) {
             dto.getFamilyMemberIds().forEach(memberId -> {
@@ -111,45 +104,64 @@ public class CustomerService {
         return customerRepository.findAll(pageable).map(this::toResponseDTO);
     }
 
+    // ✅ Returns Map with counts
     @Transactional
-    public int bulkUpload(MultipartFile file) throws Exception {
-        int count = 0;
+    public Map<String, Object> bulkUpload(MultipartFile file) throws Exception {
+        int created = 0, updated = 0, failed = 0, totalRows = 0;
+
         try (InputStream is = file.getInputStream();
              Workbook workbook = new XSSFWorkbook(is)) {
 
             Sheet sheet = workbook.getSheetAt(0);
-            List<Customer> batch = new ArrayList<>();
 
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
 
-                String nic = getCellValue(row, 2);
-                if (nic.isBlank()) continue;
-                if (customerRepository.existsByNicNumber(nic)) continue;
+                try {
+                    String name = getCellValue(row, 0);
+                    String dob = getCellValue(row, 1);
+                    String nic = getCellValue(row, 2);
 
-                String name = getCellValue(row, 0);
-                String dob = getCellValue(row, 1);
-                if (name.isBlank() || dob.isBlank()) continue;
+                    if (name.isBlank() || dob.isBlank() || nic.isBlank()) {
+                        failed++;
+                        continue;
+                    }
 
-                Customer c = new Customer();
-                c.setName(name);
-                c.setDateOfBirth(LocalDate.parse(dob));
-                c.setNicNumber(nic);
-                batch.add(c);
+                    totalRows++;
+                    Optional<Customer> existing = customerRepository.findByNicNumber(nic);
 
-                if (batch.size() == 500) {
-                    customerRepository.saveAll(batch);
-                    count += batch.size();
-                    batch.clear();
+                    if (existing.isPresent()) {
+                        Customer c = existing.get();
+                        c.setName(name);
+                        c.setDateOfBirth(LocalDate.parse(dob));
+                        customerRepository.save(c);
+                        updated++;
+                    } else {
+                        Customer c = new Customer();
+                        c.setName(name);
+                        c.setDateOfBirth(LocalDate.parse(dob));
+                        c.setNicNumber(nic);
+                        customerRepository.save(c);
+                        created++;
+                    }
+
+                    if ((created + updated) % 500 == 0) {
+                        customerRepository.flush();
+                    }
+
+                } catch (Exception e) {
+                    failed++;
                 }
             }
-            if (!batch.isEmpty()) {
-                customerRepository.saveAll(batch);
-                count += batch.size();
-            }
         }
-        return count;
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("totalRows", totalRows);
+        result.put("created", created);
+        result.put("updated", updated);
+        result.put("failed", failed);
+        return result;
     }
 
     private void mapDtoToEntity(CustomerRequestDTO dto, Customer customer) {
@@ -169,7 +181,6 @@ public class CustomerService {
             customer.setMobiles(mobiles);
         }
 
-        // ✅ Fixed: filter blank addresses and null cityId
         if (dto.getAddresses() != null) {
             Set<CustomerAddress> addresses = dto.getAddresses().stream()
                     .filter(addrDto -> addrDto.getAddressLine1() != null && !addrDto.getAddressLine1().isBlank())
