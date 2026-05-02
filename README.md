@@ -15,6 +15,24 @@ Spring Boot backend for the Customer Management System.
 > **Note:** The assignment specifies Java 8. However, Spring Boot 3.x
 > requires Java 17 as minimum. All functional requirements are fully implemented.
 
+## API Endpoints
+
+### Get All Customers
+`GET /api/customers`
+![Get Customers](screenshots/get-customers.png)
+
+### Create Customer
+`POST /api/customers`
+![Create Customer](screenshots/create-customer.png)
+
+### Update Customer
+`PUT /api/customers/{id}`
+![Update Customer](screenshots/update-customer.png)
+
+### Bulk Upload
+`POST /api/customers/bulk-upload`
+![Bulk Upload](screenshots/bulk-upload.png)
+
 ## Prerequisites
 - Java 17+
 - Maven 3.6+
